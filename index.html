@@ -183,13 +183,21 @@
                 
                 const rows = csvText.split('\n').map(row => row.split('","').map(cell => cell.replace(/"/g, '')));
                 
-                employees = rows.slice(9) // ---!!! កែសម្រួលនៅទីនេះ ទៅជា 9 !!!---
-                    .map(row => ({
-                        id: row[4],       // Column E
-                        name: row[11],      // Column L
-                        photoUrl: row[26] // Column AA
-                    }))
-                    .filter(emp => emp.id && emp.name && emp.photoUrl); 
+                // ---!!! កែសម្រួលតក្កវិជ្ជាត្រង (Filter Logic) នៅទីនេះ !!!---
+                employees = rows.slice(1) // 1. រំលងតែ Header របស់ Google
+                    .map(row => {
+                        const id = row[4];       // Column E
+                        const name = row[11];      // Column L
+                        const photoUrl = row[26]; // Column AA
+
+                        // 2. ពិនិត្យមើលថាតើវាជាជួរដេកចំណងជើង (Header) ឬទិន្នន័យមិនត្រឹមត្រូវ
+                        if (!id || id.includes('អត្តលេខ') || !name || name.includes('គោត្តនាម') || !photoUrl || !photoUrl.startsWith('http')) {
+                            return null; 
+                        }
+                        
+                        return { id, name, photoUrl };
+                    })
+                    .filter(emp => emp); // 3. ត្រងយកតែកម្មករដែលត្រឹមត្រូវ (មិនមែន null)
                 
                 populateCombobox(employees);
             } catch (error) {
@@ -308,10 +316,14 @@
             document.getElementById('employee-id-display').textContent = `ID: ${selectedEmployee.id}`;
             checkInOutStep.classList.remove('hidden');
             
-            // ជំនួសការហៅ localStorage ដោយការ fetch ពី server
-            await fetchTodaysLog(); 
-            // updateLogDisplay(); // fetchTodaysLog() នឹងហៅ
-            // updateAttendanceButton(); // fetchTodaysLog() នឹងហៅ
+            // ---!!! កែសម្រួលនៅទីនេះ !!!---
+            // មិន Fetch Log ពេលចាប់ផ្ដើមទៀតទេ (ដោយសារបញ្ហា CORS GET)
+            // await fetchTodaysLog(); 
+            
+            // បង្ហាញ UI ភ្លាមៗ (Log នឹងទទេ)
+            updateLogDisplay(); 
+            // ប៊ូតុងនឹងបង្ហាញ "Check In" ដោយស្វ័យប្រវត្តិ
+            updateAttendanceButton(); 
         }
 
         // អនុគមន៍ថ្មីសម្រាប់កំណត់ស្ថានភាពប៊ូតុង
@@ -390,41 +402,12 @@
             );
         }
 
-        // ---!!! អនុគមន៍ថ្មី សម្រាប់ទាញ Log ពី Server !!!---
+        // ---!!! អនុគមន៍ fetchTodaysLog ត្រូវបានដកចេញ (មិនប្រើទៀតទេ) !!!---
+        /*
         async function fetchTodaysLog() {
-            if (!selectedEmployee) return;
-            
-            attendanceButton.disabled = true;
-            messageDiv.textContent = 'កំពុងទាញកំណត់ត្រា...';
-            messageDiv.className = 'text-center h-12 text-yellow-400';
-
-            const today = new Date().toISOString().slice(0, 10);
-            const getLogsUrl = `${SCRIPT_URL}?action=getLogs&employeeId=${selectedEmployee.id}&date=${today}`;
-
-            try {
-                const response = await fetch(getLogsUrl);
-                if (!response.ok) throw new Error('Network response was not ok');
-                
-                const result = await response.json();
-                
-                if (result.status === 'success' && Array.isArray(result.logs)) {
-                    // សន្មត់ថា server បញ្ជូនមកជា array of objects: [{action: "Check In", time: "08:00"}, ...]
-                    currentEmployeeLog = result.logs;
-                } else {
-                    // បើមិនមាន Log ឬមានបញ្ហា ចាប់ផ្ដើមពីទទេ
-                    currentEmployeeLog = [];
-                }
-            } catch (error) {
-                console.error('Error fetching logs:', error);
-                messageDiv.textContent = 'មិនអាចទាញកំណត់ត្រាបានទេ។';
-                messageDiv.className = 'text-center h-12 text-red-500';
-                currentEmployeeLog = []; // ចាប់ផ្ដើមពីទទេ បើ fetch បរាជ័យ
-            }
-            
-            // Update UI ដោយផ្អែកលើទិន្នន័យដែលទើប fetch
-            updateLogDisplay();
-            updateAttendanceButton();
+            ...
         }
+        */
 
         // --- QR Code Functions (ដកចេញ) ---
         
@@ -461,9 +444,18 @@
                     
                     localStorage.setItem('lastActivityTimestamp', Date.now().toString()); // រក្សាទុកសម្រាប់ session timeout
 
-                    // *** កែសម្រួលនៅទីនេះ ***
-                    // មិនប្រើ saveLog ទៀតទេ គឺ fetch ទិន្នន័យថ្មីពី server វិញ
-                    fetchTodaysLog(); // វានឹង update Log បង្ហាញ និងប៊ូតុង
+                    // ---!!! កែសម្រួលនៅទីនេះ !!!---
+                    // ធ្វើបច្ចុប្បន្នភាព Log ដោយផ្អែកលើទិន្នន័យដែល Server បញ្ជូនមកវិញ
+                    if (Array.isArray(result.logs)) {
+                        currentEmployeeLog = result.logs;
+                    } else {
+                        // បើ Server មិនបញ្ជូន logs មក (កូដចាស់?) ត្រូវ Update ខ្លួនឯង (ជាបណ្ដោះអាសន្ន)
+                        const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit'});
+                        currentEmployeeLog.push({ action, time });
+                    }
+                    
+                    updateLogDisplay();
+                    updateAttendanceButton();
                     
                 } else {
                     messageDiv.textContent = result.message || 'An unknown error occurred.';
@@ -606,6 +598,7 @@
     </script>
 </body>
 </html>
+
 
 
 
