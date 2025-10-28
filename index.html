@@ -132,13 +132,9 @@
         let wrongLocationAttempts = 0;
         let currentEmployeeLog = []; // ---!!! អថេរថ្មីសម្រាប់ផ្ទុក Log ថ្ងៃនេះ !!!---
 
-        // កូអរដោនេថ្មី
-        const ALLOWED_AREA_COORDS = [
-            [11.414658882038776, 104.76390790535955],
-            [11.414695690226068, 104.7638341446153],
-            [11.414395308986704, 104.76369131699236],
-            [11.414361129919621, 104.76376507773661]
-        ];
+        // ---!!! កែសម្រួលនៅទីនេះ ទៅជាចំណុចកណ្តាល និងរង្វង់ !!!---
+        const ALLOWED_CENTER_POINT = [11.414488376961975, 104.76381669535422];
+        const ALLOWED_RADIUS_METERS = 15;
 
         const GOOGLE_SHEET_ID = '1eRyPoifzyvB4oBmruNyXcoKMKPRqjk6xDD6-bPNW6pc';
         const GOOGLE_SHEET_NAME = 'DIList';
@@ -362,7 +358,10 @@
                 (position) => {
                     const userCoords = [position.coords.latitude, position.coords.longitude];
                     
-                    if (isPointInPolygon(userCoords, ALLOWED_AREA_COORDS)) {
+                    // ---!!! កែសម្រួលតក្កវិជ្ជាពិនិត្យទីតាំងនៅទីនេះ !!!---
+                    const distance = getDistanceInMeters(userCoords, ALLOWED_CENTER_POINT);
+
+                    if (distance <= ALLOWED_RADIUS_METERS) {
                         wrongLocationAttempts = 0; // Reset
                         submitAttendance(position); // បញ្ជូនទីតាំងទៅអនុគមន៍ submit
                     } else {
@@ -374,7 +373,7 @@
                             speak(finalMessage, { rate: 0.9 });
                             // មិន reset ប៊ូតុងទេ ព្រោះបរាជ័យច្រើនដង
                         } else {
-                            messageDiv.textContent = 'ទីតាំង GPS មិនត្រឹមត្រូវ។ អ្នកមិននៅក្នុងតំបន់ដែលបានកំណត់ទេ។';
+                            messageDiv.textContent = `ទីតាំង GPS មិនត្រឹមត្រូវ។ (ចម្ងាយ ${distance.toFixed(0)} ម៉ែត្រ)`;
                             messageDiv.className = 'text-center h-12 text-red-500';
                             speak('ទីតាំងមិនត្រឹមត្រូវ សូមព្យាយាមម្ដងទៀត', { rate: 0.9 });
                             setTimeout(() => {
@@ -512,17 +511,36 @@
         }
 
         // --- Utility Functions ---
-        function isPointInPolygon(point, polygon) {
-            let x = point[0], y = point[1];
-            let inside = false;
-            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-                let xi = polygon[i][0], yi = polygon[i][1];
-                let xj = polygon[j][0], yj = polygon[j][1];
-                let intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
+
+        // ---!!! អនុគមន៍ថ្មី សម្រាប់គណនាចម្ងាយ (Haversine formula) !!!---
+        function getDistanceInMeters(point1, point2) {
+            const lat1 = point1[0];
+            const lon1 = point1[1];
+            const lat2 = point2[0];
+            const lon2 = point2[1];
+
+            const R = 6371e3; // รัศมีផែនដីគិតជាម៉ែត្រ
+            const phi1 = lat1 * Math.PI / 180; // latitude គិតជា radians
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const d = R * c; // ចម្ងាយគិតជាម៉ែត្រ
+            return d;
         }
+        
+        // ---!!! ដក isPointInPolygon ចេញ !!!---
+        /*
+        function isPointInPolygon(point, polygon) {
+            ...
+        }
+        */
         
         function stopAllStreams() {
             if (currentStream) {
@@ -598,6 +616,7 @@
     </script>
 </body>
 </html>
+
 
 
 
